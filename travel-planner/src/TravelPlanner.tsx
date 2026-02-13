@@ -363,12 +363,19 @@ const TravelPlanner: React.FC = () => {
         </div>
 
         {result && (
-          <div className="result-panel glass-panel" style={{ maxWidth: 600 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Title level={3} style={{ color: '#1b4a4e', marginTop: 0 }}>{result.destination}</Title>
-              <Button icon={<SaveOutlined />} onClick={handleSave} type="dashed">
-                保存行程
-              </Button>
+          <div id="itinerary-result" className="result-panel glass-panel" style={{ maxWidth: 600 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Title level={3} style={{ color: '#1b4a4e', margin: 0 }}>{result.destination}</Title>
+              <Space>
+                <Button 
+                  type="primary" 
+                  icon={<SaveOutlined />} 
+                  onClick={handleSave}
+                  style={{ backgroundColor: '#1b4a4e' }}
+                >
+                  保存行程
+                </Button>
+              </Space>
             </div>
             <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>{result.summary}</Text>
             
