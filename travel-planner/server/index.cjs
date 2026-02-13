@@ -21,10 +21,13 @@ app.post('/api/generate', async (req, res) => {
   }
 
   try {
-    const openai = new OpenAI({ apiKey });
+    const openai = new OpenAI({ 
+      apiKey,
+      baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+    });
     const completion = await openai.chat.completions.create({
       messages: [{ role: "user", content: prompt }],
-      model: "gpt-3.5-turbo",
+      model: "qwen-plus",
     });
 
     const content = completion.choices[0].message.content;

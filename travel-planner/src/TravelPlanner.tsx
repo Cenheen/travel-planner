@@ -172,11 +172,11 @@ const TravelPlanner: React.FC = () => {
   };
 
   const onFinish = (values: TravelFormValues) => {
-    const storedOpenaiKey = localStorage.getItem('openai_api_key');
+    const storedApiKey = localStorage.getItem('dashscope_api_key');
     const storedUnsplashKey = localStorage.getItem('unsplash_access_key');
 
-    if (storedOpenaiKey) {
-      handleGenerate(values, storedOpenaiKey, storedUnsplashKey || undefined);
+    if (storedApiKey) {
+      handleGenerate(values, storedApiKey, storedUnsplashKey || undefined);
     } else {
       setPendingValues(values);
       setIsApiKeyModalVisible(true);
@@ -184,7 +184,7 @@ const TravelPlanner: React.FC = () => {
   };
 
   const handleApiKeySubmit = (values: { openaiApiKey: string; unsplashAccessKey?: string }) => {
-    localStorage.setItem('openai_api_key', values.openaiApiKey);
+    localStorage.setItem('dashscope_api_key', values.openaiApiKey);
     if (values.unsplashAccessKey) {
       localStorage.setItem('unsplash_access_key', values.unsplashAccessKey);
     }
@@ -404,37 +404,27 @@ const TravelPlanner: React.FC = () => {
         )}
         
         <Modal
-          title="配置 API 密钥"
+          title="需要 API Key"
           open={isApiKeyModalVisible}
           onCancel={() => setIsApiKeyModalVisible(false)}
           footer={null}
         >
-          <p>配置您的个人 API 密钥以开启完整体验。</p>
-          <p style={{ fontSize: 12, color: '#999' }}>密钥仅存储在您的本地浏览器中，不会上传到服务器。</p>
-          
-          <Form 
-            onFinish={handleApiKeySubmit}
-            initialValues={{
-              openaiApiKey: localStorage.getItem('openai_api_key'),
-              unsplashAccessKey: localStorage.getItem('unsplash_access_key')
-            }}
-            layout="vertical"
-          >
+          <Form onFinish={handleApiKeySubmit} layout="vertical">
             <Form.Item
               name="openaiApiKey"
-              label="OpenAI API Key (必填 - 用于生成行程)"
-              rules={[{ required: true, message: '请输入您的 OpenAI API Key' }]}
-              extra={<a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer">获取 OpenAI Key</a>}
+              label="阿里云 DashScope API Key (用于生成行程)"
+              rules={[{ required: true, message: '请输入 API Key' }]}
+              help="我们需要使用阿里云千问 (Qwen) 模型来为您生成行程。您的 Key 仅存储在本地浏览器中。"
             >
-              <Input.Password placeholder="sk-..." />
+              <Input.Password prefix={<KeyOutlined />} placeholder="sk-..." />
             </Form.Item>
-
+            
             <Form.Item
               name="unsplashAccessKey"
-              label="Unsplash Access Key (可选 - 用于背景图)"
-              extra={<a href="https://unsplash.com/oauth/applications" target="_blank" rel="noreferrer">获取 Unsplash Key</a>}
+              label="Unsplash Access Key (可选, 用于获取美图)"
+              help="如果不填，将使用默认背景图。"
             >
-              <Input.Password placeholder="输入 Access Key..." prefix={<PictureOutlined />} />
+              <Input.Password prefix={<PictureOutlined />} placeholder="Unsplash Access Key" />
             </Form.Item>
 
             <Form.Item>
