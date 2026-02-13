@@ -3,7 +3,6 @@ import { Form, Input, DatePicker, Checkbox, Radio, Button, Card, Typography, Spa
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { GlobalOutlined, RocketOutlined, ScheduleOutlined, KeyOutlined, PictureOutlined, SaveOutlined, HistoryOutlined, DeleteOutlined } from '@ant-design/icons';
-import OpenAI from 'openai';
 import './TravelPlanner.css';
 
 const { Title, Text } = Typography;
