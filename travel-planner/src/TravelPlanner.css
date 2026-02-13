@@ -1,0 +1,101 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap');
+
+.travel-planner-container {
+  background-image: url('https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2021&q=80');
+  background-size: cover;
+  background-position: center;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px 20px;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  padding: 40px;
+  width: 100%;
+  max-width: 500px;
+  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.2);
+  transition: transform 0.3s ease;
+}
+
+.glass-panel:hover {
+  transform: translateY(-5px);
+}
+
+.header-section {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.form-label {
+  font-family: 'Playfair Display', serif;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: #1b4a4e;
+  font-size: 14px;
+}
+
+.custom-checkbox-group .ant-checkbox-wrapper {
+  margin-bottom: 8px;
+  font-family: 'Inter', sans-serif;
+  font-size: 15px;
+}
+
+.style-radio-group {
+  width: 100%;
+  display: flex;
+}
+
+.style-radio-group .ant-radio-button-wrapper {
+  flex: 1;
+  text-align: center;
+  height: 40px;
+  line-height: 38px;
+  font-size: 15px;
+}
+
+.result-panel {
+  max-width: 400px;
+  animation: fadeIn 0.8s ease-out;
+}
+
+.result-item {
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+  padding-bottom: 12px;
+}
+
+.tag {
+  display: inline-block;
+  background: #1b4a4e;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 100px;
+  margin-right: 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Antd Overrides within the container */
+.ant-picker, .ant-input-affix-wrapper {
+  background-color: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(0,0,0,0.1);
+}
+
+.ant-picker:hover, .ant-input-affix-wrapper:hover {
+  background-color: #fff;
+}
