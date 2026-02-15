@@ -34,6 +34,11 @@ const TravelPlanner: React.FC = () => {
   const [pendingValues, setPendingValues] = useState<TravelFormValues | null>(null);
   const [backgroundImage, setBackgroundImage] = useState<string>('https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2021&q=80');
 
+  // Amap State
+  const [placeSearchVisible, setPlaceSearchVisible] = useState(false);
+  const [placeKeyword, setPlaceKeyword] = useState('');
+  const [placeResult, setPlaceResult] = useState<any>(null);
+
   // Load user from local storage on mount
   useEffect(() => {
     const storedUser = localStorage.getItem('user_auth');
@@ -285,6 +290,29 @@ const TravelPlanner: React.FC = () => {
     }, 100);
   };
 
+  const handleSearchPlace = async () => {
+    if (!placeKeyword) {
+      message.warning('请输入地点名称');
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/place?keyword=${encodeURIComponent(placeKeyword)}`);
+      if (response.ok) {
+        const data = await response.json();
+        setPlaceResult(data);
+      } else {
+        const error = await response.json();
+        message.error(error.error || '未找到该地点信息');
+        setPlaceResult(null);
+      }
+    } catch (error) {
+      message.error('查询失败');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <ConfigProvider
       theme={{
@@ -421,9 +449,14 @@ const TravelPlanner: React.FC = () => {
               </Form.Item>
               
               <div style={{ textAlign: 'center', marginTop: 10 }}>
-                <Button type="link" size="small" icon={<KeyOutlined />} onClick={() => setIsApiKeyModalVisible(true)}>
-                  配置 API 密钥
-                </Button>
+                <Space>
+                  <Button type="link" size="small" icon={<PictureOutlined />} onClick={() => setPlaceSearchVisible(true)}>
+                    查评分
+                  </Button>
+                  <Button type="link" size="small" icon={<KeyOutlined />} onClick={() => setIsApiKeyModalVisible(true)}>
+                    配置 API 密钥
+                  </Button>
+                </Space>
               </div>
             </Form>
           </Card>
@@ -548,6 +581,48 @@ const TravelPlanner: React.FC = () => {
               }
             ]}
           />
+        </Modal>
+
+        {/* Place Search Modal */}
+        <Modal
+          title="地点评分查询 (基于高德地图)"
+          open={placeSearchVisible}
+          onCancel={() => {
+            setPlaceSearchVisible(false);
+            setPlaceResult(null);
+            setPlaceKeyword('');
+          }}
+          footer={null}
+        >
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            <Input 
+              placeholder="输入地点名称 (如: 故宫)" 
+              value={placeKeyword}
+              onChange={e => setPlaceKeyword(e.target.value)}
+              onPressEnter={handleSearchPlace}
+            />
+            <Button type="primary" onClick={handleSearchPlace} loading={loading}>查询</Button>
+          </div>
+
+          {placeResult && (
+            <Card size="small" title={placeResult.name}>
+               <p><strong>评分:</strong> <span style={{ color: '#faad14', fontSize: '1.2em' }}>{placeResult.rating}</span> / 5.0</p>
+               <p><strong>类型:</strong> {placeResult.type}</p>
+               <p><strong>地址:</strong> {placeResult.address}</p>
+               {placeResult.photos && placeResult.photos.length > 0 && (
+                 <div style={{ marginTop: 10 }}>
+                   <img 
+                     src={placeResult.photos[0].url} 
+                     alt={placeResult.name} 
+                     style={{ width: '100%', borderRadius: 8, maxHeight: 200, objectFit: 'cover' }} 
+                   />
+                 </div>
+               )}
+            </Card>
+          )}
+          <div style={{ marginTop: 16, fontSize: '12px', color: '#999' }}>
+            注: 需要在服务器 .env 文件中配置 AMAP_KEY 才能正常使用。
+          </div>
         </Modal>
 
         <Drawer

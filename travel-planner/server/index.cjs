@@ -112,6 +112,45 @@ app.post('/api/generate', async (req, res) => {
   }
 });
 
+// API: Search Place via Amap (Proxy for Ratings/Details)
+app.get('/api/place', async (req, res) => {
+  const { keyword } = req.query;
+  // Note: For Web API service, use the Web Service Key
+  const AMAP_KEY = process.env.AMAP_KEY;
+  
+  if (!AMAP_KEY) {
+    return res.status(500).json({ error: 'Server missing Amap API Key' });
+  }
+
+  if (!keyword) {
+    return res.status(400).json({ error: 'Keyword is required' });
+  }
+
+  try {
+    // Amap Text Search API: https://restapi.amap.com/v3/place/text
+    const url = `https://restapi.amap.com/v3/place/text?keywords=${encodeURIComponent(keyword)}&key=${AMAP_KEY}&extensions=all`;
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (data.status === '1' && data.pois && data.pois.length > 0) {
+      // Return the most relevant POI with rating
+      const poi = data.pois[0];
+      res.json({
+        name: poi.name,
+        rating: poi.biz_ext?.rating || '暂无评分',
+        address: poi.address,
+        photos: poi.photos || [],
+        type: poi.type
+      });
+    } else {
+      res.status(404).json({ error: 'Place not found' });
+    }
+  } catch (error) {
+    console.error('Amap API Error:', error);
+    res.status(500).json({ error: 'Failed to fetch place data' });
+  }
+});
+
 // API: Save Trip (Protected)
 app.post('/api/trips', authenticateToken, async (req, res) => {
   const { destination, summary, full_json } = req.body;
