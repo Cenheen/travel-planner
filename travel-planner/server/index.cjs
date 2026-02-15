@@ -16,7 +16,12 @@ app.use(cors());
 app.use(express.json());
 
 // Serve static files from the React app build directory
-app.use(express.static(path.join(__dirname, '../dist')));
+const distPath = path.join(__dirname, '../dist');
+console.log('Serving static files from:', distPath);
+if (!require('fs').existsSync(distPath)) {
+  console.error('WARNING: dist directory not found at', distPath);
+}
+app.use(express.static(distPath));
 
 // Middleware: Authenticate Token
 const authenticateToken = (req, res, next) => {
@@ -215,7 +220,12 @@ app.delete('/api/trips/:id', authenticateToken, async (req, res) => {
 
 // The "catchall" handler
 app.get(/.*/, (req, res) => {
-  res.sendFile(path.join(__dirname, '../dist/index.html'));
+  const indexPath = path.join(distPath, 'index.html');
+  if (require('fs').existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).send('App is building, please wait... (dist/index.html not found)');
+  }
 });
 
 app.listen(port, () => {
