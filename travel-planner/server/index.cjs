@@ -1,10 +1,16 @@
 const express = require('express');
 const cors = require('cors');
+require('dotenv').config(); // Load environment variables
 const OpenAI = require('openai');
 const path = require('path');
-const db = require('./db.cjs');
+const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+
 const app = express();
 const port = process.env.PORT || 3001;
+const prisma = new PrismaClient();
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-it-in-production';
 
 app.use(cors());
 app.use(express.json());
@@ -12,7 +18,75 @@ app.use(express.json());
 // Serve static files from the React app build directory
 app.use(express.static(path.join(__dirname, '../dist')));
 
-// API: Generate Itinerary
+// Middleware: Authenticate Token
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+
+  if (!token) return res.sendStatus(401);
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.sendStatus(403);
+    req.user = user;
+    next();
+  });
+};
+
+// API: Register
+app.post('/api/register', async (req, res) => {
+  const { email, password } = req.body;
+  
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required' });
+  }
+
+  try {
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await prisma.user.create({
+      data: {
+        email,
+        password: hashedPassword
+      }
+    });
+
+    // Auto login after register
+    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ token, user: { id: user.id, email: user.email } });
+  } catch (error) {
+    console.error('Register error:', error);
+    res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
+// API: Login
+app.post('/api/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return res.status(400).json({ error: 'User not found' });
+    }
+
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
+      return res.status(400).json({ error: 'Invalid password' });
+    }
+
+    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ token, user: { id: user.id, email: user.email } });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// API: Generate Itinerary (Protected - optional, maybe public is fine too? Let's keep it public for now but require key)
 app.post('/api/generate', async (req, res) => {
   const { apiKey, prompt } = req.body;
 
@@ -38,48 +112,69 @@ app.post('/api/generate', async (req, res) => {
   }
 });
 
-// API: Save Trip
-app.post('/api/trips', (req, res) => {
-  const { id, destination, summary, full_json } = req.body;
-  const sql = `INSERT INTO trips (id, destination, summary, full_json) VALUES (?, ?, ?, ?)`;
+// API: Save Trip (Protected)
+app.post('/api/trips', authenticateToken, async (req, res) => {
+  const { destination, summary, full_json } = req.body;
   
-  db.run(sql, [id, destination, summary, JSON.stringify(full_json)], function(err) {
-    if (err) {
-      return res.status(400).json({ error: err.message });
-    }
-    res.json({ message: 'Trip saved successfully', id });
-  });
+  try {
+    const trip = await prisma.trip.create({
+      data: {
+        destination,
+        summary,
+        fullJson: JSON.stringify(full_json),
+        userId: req.user.userId
+      }
+    });
+    res.json({ message: 'Trip saved successfully', trip });
+  } catch (error) {
+    console.error('Save trip error:', error);
+    res.status(500).json({ error: 'Failed to save trip' });
+  }
 });
 
-// API: Get All Trips
-app.get('/api/trips', (req, res) => {
-  const sql = `SELECT * FROM trips ORDER BY created_at DESC`;
-  db.all(sql, [], (err, rows) => {
-    if (err) {
-      return res.status(400).json({ error: err.message });
-    }
-    const trips = rows.map(row => ({
-      ...row,
-      full_json: JSON.parse(row.full_json)
+// API: Get All Trips (Protected)
+app.get('/api/trips', authenticateToken, async (req, res) => {
+  try {
+    const trips = await prisma.trip.findMany({
+      where: { userId: req.user.userId },
+      orderBy: { createdAt: 'desc' }
+    });
+    
+    const parsedTrips = trips.map(t => ({
+      ...t,
+      full_json: JSON.parse(t.fullJson)
     }));
-    res.json({ trips });
-  });
+    
+    res.json({ trips: parsedTrips });
+  } catch (error) {
+    console.error('Get trips error:', error);
+    res.status(500).json({ error: 'Failed to fetch trips' });
+  }
 });
 
-// API: Delete Trip
-app.delete('/api/trips/:id', (req, res) => {
+// API: Delete Trip (Protected)
+app.delete('/api/trips/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  const sql = `DELETE FROM trips WHERE id = ?`;
-  db.run(sql, id, function(err) {
-    if (err) {
-      return res.status(400).json({ error: err.message });
+  
+  try {
+    // Ensure the trip belongs to the user
+    const trip = await prisma.trip.findFirst({
+      where: { id, userId: req.user.userId }
+    });
+
+    if (!trip) {
+      return res.status(404).json({ error: 'Trip not found or unauthorized' });
     }
-    res.json({ message: 'Trip deleted', changes: this.changes });
-  });
+
+    await prisma.trip.delete({ where: { id } });
+    res.json({ message: 'Trip deleted' });
+  } catch (error) {
+    console.error('Delete trip error:', error);
+    res.status(500).json({ error: 'Failed to delete trip' });
+  }
 });
 
-// The "catchall" handler: for any request that doesn't
-// match one above, send back React's index.html file.
+// The "catchall" handler
 app.get(/.*/, (req, res) => {
   res.sendFile(path.join(__dirname, '../dist/index.html'));
 });

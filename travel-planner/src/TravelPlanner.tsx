@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Input, DatePicker, Checkbox, Radio, Button, Card, Typography, Space, ConfigProvider, theme, Modal, message, Drawer, List, Popconfirm } from 'antd';
+import { Form, Input, DatePicker, Checkbox, Radio, Button, Card, Typography, Space, ConfigProvider, theme, Modal, message, Drawer, List, Popconfirm, Tabs } from 'antd';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
-import { GlobalOutlined, RocketOutlined, ScheduleOutlined, KeyOutlined, PictureOutlined, SaveOutlined, HistoryOutlined, DeleteOutlined } from '@ant-design/icons';
+import { GlobalOutlined, RocketOutlined, ScheduleOutlined, KeyOutlined, PictureOutlined, SaveOutlined, HistoryOutlined, DeleteOutlined, UserOutlined, LockOutlined, LogoutOutlined } from '@ant-design/icons';
 import './TravelPlanner.css';
 
 const { Title, Text } = Typography;
@@ -17,60 +17,87 @@ interface TravelFormValues {
   unsplashAccessKey?: string;
 }
 
-// 简单的 LocalStorage 存储服务
-const StorageService = {
-  saveItinerary: (itinerary: any) => {
-    const existing = StorageService.getItineraries();
-    const newItem = {
-      id: Date.now().toString(),
-      createdAt: new Date().toISOString(),
-      ...itinerary
-    };
-    const updated = [newItem, ...existing];
-    localStorage.setItem('saved_itineraries', JSON.stringify(updated));
-    return newItem;
-  },
-  getItineraries: () => {
-    const data = localStorage.getItem('saved_itineraries');
-    return data ? JSON.parse(data) : [];
-  },
-  deleteItinerary: (id: string) => {
-    const existing = StorageService.getItineraries();
-    const updated = existing.filter((item: any) => item.id !== id);
-    localStorage.setItem('saved_itineraries', JSON.stringify(updated));
-    return updated;
-  }
-};
-
 const TravelPlanner: React.FC = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any | null>(null);
+  
+  // Modals state
   const [isApiKeyModalVisible, setIsApiKeyModalVisible] = useState(false);
   const [isHistoryVisible, setIsHistoryVisible] = useState(false);
+  const [isLoginModalVisible, setIsLoginModalVisible] = useState(false);
+  
+  // User state
+  const [user, setUser] = useState<{email: string, token: string} | null>(null);
   const [savedTrips, setSavedTrips] = useState<any[]>([]);
+  
   const [pendingValues, setPendingValues] = useState<TravelFormValues | null>(null);
   const [backgroundImage, setBackgroundImage] = useState<string>('https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2021&q=80');
 
-  // Load API keys and history on mount
+  // Load user from local storage on mount
   useEffect(() => {
-    const unsplashKey = localStorage.getItem('unsplash_access_key');
-    if (unsplashKey) {
-      // Optional: Pre-fetch a random travel image? 
+    const storedUser = localStorage.getItem('user_auth');
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
     }
-    fetchSavedTrips();
   }, []);
 
+  // Fetch trips when user logs in or history opens
+  useEffect(() => {
+    if (user && isHistoryVisible) {
+      fetchSavedTrips();
+    }
+  }, [user, isHistoryVisible]);
+
   const fetchSavedTrips = async () => {
+    if (!user) return;
     try {
-      const response = await fetch('/api/trips');
+      const response = await fetch('/api/trips', {
+        headers: { 'Authorization': `Bearer ${user.token}` }
+      });
       if (response.ok) {
         const data = await response.json();
         setSavedTrips(data.trips);
+      } else {
+        if (response.status === 403 || response.status === 401) {
+          handleLogout();
+        }
       }
     } catch (error) {
       console.error('Failed to fetch trips', error);
     }
+  };
+
+  const handleLogin = async (values: any, isRegister: boolean) => {
+    const endpoint = isRegister ? '/api/register' : '/api/login';
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(values)
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        const userData = { email: data.user.email, token: data.token };
+        setUser(userData);
+        localStorage.setItem('user_auth', JSON.stringify(userData));
+        setIsLoginModalVisible(false);
+        message.success(isRegister ? '注册成功！已自动登录' : '登录成功！');
+      } else {
+        message.error(data.error || '操作失败');
+      }
+    } catch (e) {
+      message.error('网络错误，请重试');
+    }
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem('user_auth');
+    setSavedTrips([]);
+    message.info('已退出登录');
   };
 
   const fetchDestinationImage = async (destination: string, accessKey: string) => {
@@ -83,7 +110,6 @@ const TravelPlanner: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to fetch Unsplash image', error);
-      // Fail silently, keep default background
     }
   };
 
@@ -91,12 +117,10 @@ const TravelPlanner: React.FC = () => {
     setLoading(true);
     setResult(null);
 
-    // 1. Fetch Image if Unsplash Key is provided
     if (unsplashKey) {
       fetchDestinationImage(values.destination, unsplashKey);
     }
 
-    // 2. Generate Itinerary via Backend API
     try {
       const detailLevelMap = {
         detailed: '详细的 (detailed)',
@@ -157,6 +181,13 @@ const TravelPlanner: React.FC = () => {
           const parsedResult = JSON.parse(content);
           setResult(parsedResult);
           message.success('行程生成成功！');
+          
+          setTimeout(() => {
+            const resultElement = document.getElementById('itinerary-result');
+            if (resultElement) {
+              resultElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          }, 100);
         } catch (e) {
           console.error('JSON Parse Error', e);
           message.error('解析 AI 响应失败，请重试。');
@@ -195,13 +226,21 @@ const TravelPlanner: React.FC = () => {
   };
 
   const handleSave = async () => {
+    if (!user) {
+      message.warning('请先登录后再保存行程');
+      setIsLoginModalVisible(true);
+      return;
+    }
+
     if (result) {
       try {
         const response = await fetch('/api/trips', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${user.token}`
+          },
           body: JSON.stringify({
-            id: Date.now().toString(),
             destination: result.destination,
             summary: result.summary,
             full_json: result
@@ -210,7 +249,6 @@ const TravelPlanner: React.FC = () => {
 
         if (response.ok) {
           message.success('行程已保存到云端数据库！');
-          fetchSavedTrips();
         } else {
           message.error('保存失败');
         }
@@ -222,8 +260,12 @@ const TravelPlanner: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
+    if (!user) return;
     try {
-      await fetch(`/api/trips/${id}`, { method: 'DELETE' });
+      await fetch(`/api/trips/${id}`, { 
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${user.token}` }
+      });
       message.success('已删除行程记录');
       fetchSavedTrips();
     } catch (e) {
@@ -233,9 +275,14 @@ const TravelPlanner: React.FC = () => {
   };
 
   const handleViewHistory = (item: any) => {
-    setResult(item);
+    setResult(item.full_json);
     setIsHistoryVisible(false);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(() => {
+      const resultElement = document.getElementById('itinerary-result');
+      if (resultElement) {
+        resultElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
   };
 
   return (
@@ -245,7 +292,7 @@ const TravelPlanner: React.FC = () => {
         token: {
           colorPrimary: '#1b4a4e', // Deep Teal
           borderRadius: 8,
-          fontFamily: "'Playfair Display', 'Songti SC', 'SimSun', serif, system-ui", // Fallback to Songti for Chinese luxury feel
+          fontFamily: "'Playfair Display', 'Songti SC', 'SimSun', serif, system-ui",
           colorBgContainer: 'rgba(255, 255, 255, 0.9)',
         },
         components: {
@@ -268,14 +315,34 @@ const TravelPlanner: React.FC = () => {
         <div className="glass-panel">
           <div className="header-section" style={{ position: 'relative' }}>
             <div style={{ position: 'absolute', right: 0, top: 0 }}>
-              <Button 
-                type="text" 
-                icon={<HistoryOutlined />} 
-                onClick={() => setIsHistoryVisible(true)}
-                style={{ color: '#1b4a4e' }}
-              >
-                我的行程
-              </Button>
+              {user ? (
+                <Space>
+                  <Button 
+                    type="text" 
+                    icon={<HistoryOutlined />} 
+                    onClick={() => setIsHistoryVisible(true)}
+                    style={{ color: '#1b4a4e' }}
+                  >
+                    我的行程
+                  </Button>
+                  <Button 
+                    type="text" 
+                    icon={<LogoutOutlined />} 
+                    onClick={handleLogout}
+                    style={{ color: '#1b4a4e' }}
+                  >
+                    退出
+                  </Button>
+                </Space>
+              ) : (
+                <Button 
+                  type="primary" 
+                  icon={<UserOutlined />} 
+                  onClick={() => setIsLoginModalVisible(true)}
+                >
+                  登录 / 注册
+                </Button>
+              )}
             </div>
             <GlobalOutlined style={{ fontSize: 48, color: '#1b4a4e', marginBottom: 16 }} />
             <Title level={1} style={{ margin: 0, color: '#1b4a4e', fontWeight: 300, letterSpacing: '2px' }}>
@@ -410,7 +477,7 @@ const TravelPlanner: React.FC = () => {
         )}
         
         <Modal
-          title="需要 API Key"
+          title="配置 API Key"
           open={isApiKeyModalVisible}
           onCancel={() => setIsApiKeyModalVisible(false)}
           footer={null}
@@ -418,17 +485,15 @@ const TravelPlanner: React.FC = () => {
           <Form onFinish={handleApiKeySubmit} layout="vertical">
             <Form.Item
               name="openaiApiKey"
-              label="阿里云 DashScope API Key (用于生成行程)"
+              label="阿里云 DashScope API Key"
               rules={[{ required: true, message: '请输入 API Key' }]}
-              help="我们需要使用阿里云千问 (Qwen) 模型来为您生成行程。您的 Key 仅存储在本地浏览器中。"
             >
               <Input.Password prefix={<KeyOutlined />} placeholder="sk-..." />
             </Form.Item>
             
             <Form.Item
               name="unsplashAccessKey"
-              label="Unsplash Access Key (可选, 用于获取美图)"
-              help="如果不填，将使用默认背景图。"
+              label="Unsplash Access Key (可选)"
             >
               <Input.Password prefix={<PictureOutlined />} placeholder="Unsplash Access Key" />
             </Form.Item>
@@ -439,6 +504,50 @@ const TravelPlanner: React.FC = () => {
               </Button>
             </Form.Item>
           </Form>
+        </Modal>
+
+        {/* Login / Register Modal */}
+        <Modal
+          open={isLoginModalVisible}
+          onCancel={() => setIsLoginModalVisible(false)}
+          footer={null}
+          destroyOnClose
+        >
+          <Tabs
+            defaultActiveKey="login"
+            items={[
+              {
+                key: 'login',
+                label: '登录',
+                children: (
+                  <Form onFinish={(v) => handleLogin(v, false)} layout="vertical">
+                    <Form.Item name="email" rules={[{ required: true, message: '请输入邮箱' }]}>
+                      <Input prefix={<UserOutlined />} placeholder="邮箱" />
+                    </Form.Item>
+                    <Form.Item name="password" rules={[{ required: true, message: '请输入密码' }]}>
+                      <Input.Password prefix={<LockOutlined />} placeholder="密码" />
+                    </Form.Item>
+                    <Button type="primary" htmlType="submit" block>登录</Button>
+                  </Form>
+                )
+              },
+              {
+                key: 'register',
+                label: '注册',
+                children: (
+                  <Form onFinish={(v) => handleLogin(v, true)} layout="vertical">
+                    <Form.Item name="email" rules={[{ required: true, message: '请输入邮箱' }, { type: 'email', message: '邮箱格式不正确' }]}>
+                      <Input prefix={<UserOutlined />} placeholder="邮箱" />
+                    </Form.Item>
+                    <Form.Item name="password" rules={[{ required: true, message: '请输入密码' }]}>
+                      <Input.Password prefix={<LockOutlined />} placeholder="密码" />
+                    </Form.Item>
+                    <Button type="primary" htmlType="submit" block>注册并登录</Button>
+                  </Form>
+                )
+              }
+            ]}
+          />
         </Modal>
 
         <Drawer
